@@ -241,8 +241,44 @@ export function exportToHTML(crossword: Crossword): string {
       justify-content: center;
     }
     
-    .victory-overlay.show {
+    .victory-overlay.show,
+    .modal-overlay.show {
       display: flex;
+    }
+    
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .modal-content {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      text-align: center;
+      max-width: 500px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      animation: victoryPop 0.5s ease-out;
+    }
+    
+    .modal-content h2 {
+      font-size: 2em;
+      color: #667eea;
+      margin-bottom: 20px;
+    }
+    
+    .modal-content p {
+      font-size: 1.1em;
+      color: #666;
+      margin-bottom: 30px;
     }
     
     .victory-content {
@@ -369,7 +405,12 @@ export function exportToHTML(crossword: Crossword): string {
 </head>
 <body>
   <div class="container">
-    <h1>${title || 'Crossword Puzzle'}</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+      <h1 style="margin: 0;">${title || 'Crossword Puzzle'}</h1>
+      <div id="timer-display" style="font-size: 1.5em; font-weight: bold; color: #667eea; font-family: monospace;">
+        00:00
+      </div>
+    </div>
     ${author ? `<div class="author">By ${author}</div>` : ''}
     
     <div class="content">
@@ -402,6 +443,7 @@ export function exportToHTML(crossword: Crossword): string {
       <div class="victory-emoji">🎉</div>
       <h2>Congratulations!</h2>
       <p>You've completed the crossword puzzle!</p>
+      <p id="victory-time" style="font-size: 1.2em; font-weight: bold; color: #667eea; margin: 15px 0;"></p>
       <button class="btn btn-primary" onclick="document.getElementById('victory-overlay').classList.remove('show')">Close</button>
     </div>
   </div>
@@ -415,6 +457,15 @@ export function exportToHTML(crossword: Crossword): string {
     </div>
   </div>
   
+  <div class="modal-overlay" id="pause-overlay">
+    <div class="modal-content">
+      <div style="font-size: 3em; margin-bottom: 20px;">⏸️</div>
+      <h2>Puzzle Paused</h2>
+      <p>The timer has been paused. Click continue to resume solving.</p>
+      <button class="btn btn-primary" onclick="resumeTimer()">Continue</button>
+    </div>
+  </div>
+  
   <script>
     const grid = ${JSON.stringify(grid)};
             const acrossClues = ${JSON.stringify(cluesWithAnswers.across)};
@@ -425,6 +476,104 @@ export function exportToHTML(crossword: Crossword): string {
     let currentCell = null;
     let currentDirection = 'across';
     let userAnswers = {};
+    let isPuzzleComplete = false;
+    
+    // Timer state
+    let timerStartTime = null;
+    let timerPausedTime = 0;
+    let timerInterval = null;
+    let isTimerPaused = false;
+    let totalPausedTime = 0;
+    let pauseStartTime = null;
+    
+    // Format time as MM:SS or HH:MM:SS
+    function formatTime(seconds) {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secs = seconds % 60;
+      
+      if (hours > 0) {
+        return \`\${String(hours).padStart(2, '0')}:\${String(minutes).padStart(2, '0')}:\${String(secs).padStart(2, '0')}\`;
+      }
+      return \`\${String(minutes).padStart(2, '0')}:\${String(secs).padStart(2, '0')}\`;
+    }
+    
+    // Update timer display
+    function updateTimerDisplay() {
+      if (!timerStartTime) return;
+      
+      const now = Date.now();
+      const elapsed = Math.floor((now - timerStartTime - totalPausedTime) / 1000);
+      const timerEl = document.getElementById('timer-display');
+      if (timerEl) {
+        timerEl.textContent = formatTime(elapsed);
+      }
+    }
+    
+    // Start the timer
+    function startTimer() {
+      if (timerStartTime) return; // Already started
+      
+      timerStartTime = Date.now();
+      totalPausedTime = 0;
+      timerInterval = setInterval(updateTimerDisplay, 100);
+      updateTimerDisplay();
+    }
+    
+    // Pause the timer
+    function pauseTimer() {
+      if (!timerStartTime || isTimerPaused || isPuzzleComplete) return;
+      
+      isTimerPaused = true;
+      pauseStartTime = Date.now();
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      document.getElementById('pause-overlay').classList.add('show');
+    }
+    
+    // Resume the timer
+    function resumeTimer() {
+      if (!isTimerPaused || isPuzzleComplete) return;
+      
+      if (pauseStartTime) {
+        const pauseDuration = Date.now() - pauseStartTime;
+        totalPausedTime += pauseDuration;
+        pauseStartTime = null;
+      }
+      
+      isTimerPaused = false;
+      document.getElementById('pause-overlay').classList.remove('show');
+      timerInterval = setInterval(updateTimerDisplay, 100);
+      updateTimerDisplay();
+    }
+    
+    // Get elapsed time in seconds
+    function getElapsedTime() {
+      if (!timerStartTime) return 0;
+      const now = Date.now();
+      return Math.floor((now - timerStartTime - totalPausedTime) / 1000);
+    }
+    
+    // Handle visibility change (tab switch, window minimize, etc.)
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden && !isPuzzleComplete) {
+        if (timerStartTime && !isTimerPaused) {
+          pauseTimer();
+        }
+      }
+    });
+    
+    // Handle window blur/focus
+    window.addEventListener('blur', function() {
+      if (timerStartTime && !isTimerPaused && !isPuzzleComplete) {
+        pauseTimer();
+      }
+    });
+    
+    // Start timer when page loads
+    startTimer();
     
     function renderGrid() {
       const gridEl = document.getElementById('grid');
@@ -754,6 +903,29 @@ export function exportToHTML(crossword: Crossword): string {
       const isFilled = isPuzzleFilled();
       
       if (isFilled && allCorrect) {
+        // Mark puzzle as complete
+        isPuzzleComplete = true;
+        
+        // Stop the timer
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+        
+        // Disable all inputs (make read-only but still allow clicking for selection)
+        document.querySelectorAll('.cell input').forEach(input => {
+          input.readOnly = true;
+          input.style.cursor = 'pointer';
+          input.style.opacity = '1';
+        });
+        
+        // Display time in victory modal
+        const elapsedTime = getElapsedTime();
+        const timeEl = document.getElementById('victory-time');
+        if (timeEl) {
+          timeEl.textContent = \`Time: \${formatTime(elapsedTime)}\`;
+        }
+        
         document.getElementById('victory-overlay').classList.add('show');
       } else if (isFilled && !allCorrect) {
         // Puzzle is filled but has errors
@@ -762,6 +934,12 @@ export function exportToHTML(crossword: Crossword): string {
     }
     
     function handleInput(e) {
+      // Don't allow input if puzzle is complete
+      if (isPuzzleComplete) {
+        e.preventDefault();
+        return;
+      }
+      
       const input = e.target;
       const row = parseInt(input.dataset.row);
       const col = parseInt(input.dataset.col);
@@ -789,6 +967,12 @@ export function exportToHTML(crossword: Crossword): string {
     }
     
     function handleKeyDown(e) {
+      // Don't allow keyboard input if puzzle is complete
+      if (isPuzzleComplete) {
+        e.preventDefault();
+        return;
+      }
+      
       const input = e.target;
       const row = parseInt(input.dataset.row);
       const col = parseInt(input.dataset.col);
