@@ -11,6 +11,8 @@ export function calculateClueNumbers(grid: Cell[][]): Cell[][] {
   const newGrid: Cell[][] = grid.map(row => 
     row.map(cell => ({
       isBlack: cell.isBlack,
+      isCircle: cell.isCircle,
+      isShaded: cell.isShaded,
       letter: cell.letter,
       isSelected: cell.isSelected
       // number will be set below

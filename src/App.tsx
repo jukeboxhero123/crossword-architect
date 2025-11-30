@@ -376,6 +376,24 @@ function App() {
           </div>
 
           <div className="sidebar-section">
+            <h2>Cell Types</h2>
+            <div style={{ fontSize: '0.9em', color: '#666', lineHeight: '1.8' }}>
+              <div style={{ marginBottom: '8px' }}>
+                <strong>Shift + Click:</strong> Toggle black square
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                <strong>Ctrl + Click:</strong> Toggle circle
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                <strong>Alt + Click:</strong> Toggle shaded
+              </div>
+              <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e0e0e0', fontSize: '0.85em', color: '#999' }}>
+                Circles and shaded squares still contain answers
+              </div>
+            </div>
+          </div>
+
+          <div className="sidebar-section">
             <h2>Actions</h2>
             <button onClick={handleBackToMenu} className="btn btn-secondary">
               ← Back to Menu

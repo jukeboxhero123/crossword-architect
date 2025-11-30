@@ -1,5 +1,7 @@
 export interface Cell {
   isBlack: boolean;
+  isCircle?: boolean;
+  isShaded?: boolean;
   number?: number;
   letter?: string;
   isSelected?: boolean;

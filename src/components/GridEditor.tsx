@@ -14,30 +14,57 @@ interface GridEditorProps {
 export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acrossClues, downClues }: GridEditorProps) {
   const [currentDirection, setCurrentDirection] = useState<'across' | 'down'>('across');
   const [isShiftPressed, setIsShiftPressed] = useState(false);
+  const [isCtrlPressed, setIsCtrlPressed] = useState(false);
+  const [isAltPressed, setIsAltPressed] = useState(false);
   
   const numCols = grid[0]?.length || grid.length;
   const numRows = grid.length;
 
-  // Track shift key state globally
+  // Track modifier key states globally
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Shift') {
         setIsShiftPressed(true);
+      } else if (e.key === 'Control' || e.key === 'Meta') {
+        setIsCtrlPressed(true);
+      } else if (e.key === 'Alt') {
+        setIsAltPressed(true);
       }
     };
     
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Shift') {
         setIsShiftPressed(false);
+      } else if (e.key === 'Control' || e.key === 'Meta') {
+        setIsCtrlPressed(false);
+      } else if (e.key === 'Alt') {
+        setIsAltPressed(false);
       }
+    };
+    
+    // Also track via shiftKey/ctrlKey/altKey properties
+    const handleMouseDown = (e: MouseEvent) => {
+      setIsShiftPressed(e.shiftKey);
+      setIsCtrlPressed(e.ctrlKey || e.metaKey);
+      setIsAltPressed(e.altKey);
+    };
+    
+    const handleMouseUp = () => {
+      setIsShiftPressed(false);
+      setIsCtrlPressed(false);
+      setIsAltPressed(false);
     };
     
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
     
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
     };
   }, []);
 
@@ -104,16 +131,45 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
     return currentDirection;
   };
   const handleCellClick = (row: number, col: number, e?: React.MouseEvent) => {
-    // Check global shift state or event shift key
+    // Check modifiers for cell type changes
     if (isShiftPressed || e?.shiftKey) {
       // Shift+click to toggle black square
       const newGrid = grid.map(r => [...r]);
       newGrid[row][col].isBlack = !newGrid[row][col].isBlack;
+      // Clear other decorations when making black
+      if (newGrid[row][col].isBlack) {
+        newGrid[row][col].isCircle = false;
+        newGrid[row][col].isShaded = false;
+      }
       if (!newGrid[row][col].isBlack) {
         delete newGrid[row][col].number;
       }
       const numberedGrid = calculateClueNumbers(newGrid);
       onGridChange(numberedGrid);
+    } else if (e?.ctrlKey || e?.metaKey) {
+      // Ctrl/Cmd+click to toggle circle
+      const newGrid = grid.map(r => [...r]);
+      // Can't have circle on black squares
+      if (!newGrid[row][col].isBlack) {
+        newGrid[row][col].isCircle = !newGrid[row][col].isCircle;
+        // Clear shaded when adding circle
+        if (newGrid[row][col].isCircle) {
+          newGrid[row][col].isShaded = false;
+        }
+        onGridChange(newGrid);
+      }
+    } else if (e?.altKey) {
+      // Alt+click to toggle shaded
+      const newGrid = grid.map(r => [...r]);
+      // Can't have shaded on black squares
+      if (!newGrid[row][col].isBlack) {
+        newGrid[row][col].isShaded = !newGrid[row][col].isShaded;
+        // Clear circle when adding shaded
+        if (newGrid[row][col].isShaded) {
+          newGrid[row][col].isCircle = false;
+        }
+        onGridChange(newGrid);
+      }
     } else {
       // Check if clicking on the currently selected cell to toggle direction
       if (selectedCell?.row === row && selectedCell?.col === col) {
@@ -478,10 +534,8 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
               style={{
                 background: cell.isBlack 
                   ? '#333' 
-                  : highlightedWordCells.has(`${rowIdx}-${colIdx}`)
-                    ? selectedCell?.row === rowIdx && selectedCell?.col === colIdx
-                      ? '#90caf9'
-                      : '#e3f2fd'
+                  : cell.isShaded
+                    ? '#b0b0b0'
                     : '#fff',
                 position: 'relative',
                 cursor: 'pointer',
@@ -495,13 +549,41 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
                   : 'none',
               }}
             >
-              {/* Invisible overlay when shift is pressed to handle black square toggle */}
-              {isShiftPressed && !cell.isBlack && (
+              {/* Highlight overlay for current word */}
+              {highlightedWordCells.has(`${rowIdx}-${colIdx}`) && !cell.isBlack && (
                 <div
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleCellClick(rowIdx, colIdx, e);
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: selectedCell?.row === rowIdx && selectedCell?.col === colIdx
+                      ? 'rgba(66, 165, 245, 0.7)' // Vibrant blue for active cell
+                      : 'rgba(100, 181, 246, 0.6)', // Vibrant light blue for word
+                    pointerEvents: 'none',
+                    zIndex: 1,
+                  }}
+                />
+              )}
+              {/* Invisible overlay when modifiers are pressed to handle cell type changes */}
+              {(isShiftPressed || isCtrlPressed || isAltPressed) && !cell.isBlack && (
+                <div
+                  onMouseDown={(e) => {
+                    // Check which modifier is pressed
+                    if (e.shiftKey || isShiftPressed) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleCellClick(rowIdx, colIdx, e);
+                    } else if (e.ctrlKey || e.metaKey || isCtrlPressed) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleCellClick(rowIdx, colIdx, e);
+                    } else if (e.altKey || isAltPressed) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleCellClick(rowIdx, colIdx, e);
+                    }
                   }}
                   style={{
                     position: 'absolute',
@@ -523,10 +605,27 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
                     left: '3px',
                     fontSize: `${cellSize * 0.25}px`,
                     color: '#333',
+                    zIndex: 3,
                   }}
                 >
                   {cell.number}
                 </span>
+              )}
+              {cell.isCircle && !cell.isBlack && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: `${cellSize * 0.7}px`,
+                    height: `${cellSize * 0.7}px`,
+                    borderRadius: '50%',
+                    border: '2px solid #333',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                  }}
+                />
               )}
               {!cell.isBlack && (
                 <input
@@ -567,7 +666,9 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
                     margin: 0,
                     outline: 'none',
                     cursor: 'text',
-                    pointerEvents: isShiftPressed ? 'none' : 'auto',
+                    pointerEvents: (isShiftPressed || isCtrlPressed || isAltPressed) ? 'none' : 'auto',
+                    position: 'relative',
+                    zIndex: 2,
                   }}
                   maxLength={1}
                 />
@@ -577,7 +678,7 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
         )}
       </div>
       <p style={{ marginTop: '10px', color: '#666', fontSize: '0.9em' }}>
-        Type letters in cells • Auto-advances to next cell • Click current cell to toggle direction • Shift+Click to toggle black squares
+        Type letters in cells • Auto-advances to next cell • Click current cell to toggle direction
       </p>
     </div>
   );

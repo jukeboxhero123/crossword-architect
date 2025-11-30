@@ -105,17 +105,54 @@ export function exportToHTML(crossword: Crossword): string {
       z-index: 10;
     }
     
-    .cell.highlighted {
-      background: #e3e7ff;
-    }
-    
-    .cell.current-word {
-      background: #d1d9ff;
-    }
-    
     .cell.black {
       background: #333;
       cursor: default;
+    }
+    
+    .cell.shaded {
+      background: #b0b0b0;
+    }
+    
+    .cell.current-word::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(100, 181, 246, 0.6);
+      pointer-events: none;
+      z-index: 1;
+    }
+    
+    .cell.highlighted::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(66, 165, 245, 0.7);
+      pointer-events: none;
+      z-index: 1;
+    }
+    
+    .cell.highlighted.current-word::before {
+      background: rgba(66, 165, 245, 0.7);
+    }
+    
+    .cell-circle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 70%;
+      height: 70%;
+      border-radius: 50%;
+      border: 2px solid #333;
+      pointer-events: none;
+      z-index: 1;
     }
     
     .cell-number {
@@ -397,7 +434,13 @@ export function exportToHTML(crossword: Crossword): string {
         for (let col = 0; col < numCols; col++) {
           const cell = grid[row][col];
           const cellEl = document.createElement('div');
-          cellEl.className = 'cell' + (cell.isBlack ? ' black' : '');
+          let cellClass = 'cell';
+          if (cell.isBlack) {
+            cellClass += ' black';
+          } else if (cell.isShaded) {
+            cellClass += ' shaded';
+          }
+          cellEl.className = cellClass;
           cellEl.dataset.row = row;
           cellEl.dataset.col = col;
           
@@ -407,6 +450,13 @@ export function exportToHTML(crossword: Crossword): string {
               numberEl.className = 'cell-number';
               numberEl.textContent = cell.number;
               cellEl.appendChild(numberEl);
+            }
+            
+            // Add circle if needed
+            if (cell.isCircle) {
+              const circleEl = document.createElement('div');
+              circleEl.className = 'cell-circle';
+              cellEl.appendChild(circleEl);
             }
             
             const input = document.createElement('input');
