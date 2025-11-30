@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Cell, Clue } from '../types';
 import { calculateClueNumbers } from '../utils/crossword';
 
@@ -13,9 +13,33 @@ interface GridEditorProps {
 
 export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acrossClues, downClues }: GridEditorProps) {
   const [currentDirection, setCurrentDirection] = useState<'across' | 'down'>('across');
+  const [isShiftPressed, setIsShiftPressed] = useState(false);
   
   const numCols = grid[0]?.length || grid.length;
   const numRows = grid.length;
+
+  // Track shift key state globally
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setIsShiftPressed(true);
+      }
+    };
+    
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setIsShiftPressed(false);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
 
   // Get word cells for a given position and direction
   const getWordCells = (row: number, col: number, direction: 'across' | 'down'): Array<{row: number, col: number}> => {
@@ -79,8 +103,9 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
     
     return currentDirection;
   };
-  const handleCellClick = (row: number, col: number, e: React.MouseEvent) => {
-    if (e.shiftKey) {
+  const handleCellClick = (row: number, col: number, e?: React.MouseEvent) => {
+    // Check global shift state or event shift key
+    if (isShiftPressed || e?.shiftKey) {
       // Shift+click to toggle black square
       const newGrid = grid.map(r => [...r]);
       newGrid[row][col].isBlack = !newGrid[row][col].isBlack;
@@ -446,7 +471,10 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
               } ${
                 highlightedWordCells.has(`${rowIdx}-${colIdx}`) ? 'current-word' : ''
               }`}
-              onClick={(e) => handleCellClick(rowIdx, colIdx, e)}
+              onClick={(e) => {
+                // Always check global shift state on click
+                handleCellClick(rowIdx, colIdx, e);
+              }}
               style={{
                 background: cell.isBlack 
                   ? '#333' 
@@ -467,6 +495,26 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
                   : 'none',
               }}
             >
+              {/* Invisible overlay when shift is pressed to handle black square toggle */}
+              {isShiftPressed && !cell.isBlack && (
+                <div
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleCellClick(rowIdx, colIdx, e);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 10,
+                    cursor: 'pointer',
+                    backgroundColor: 'transparent',
+                  }}
+                />
+              )}
               {!cell.isBlack && cell.number && (
                 <span
                   style={{
@@ -519,6 +567,7 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
                     margin: 0,
                     outline: 'none',
                     cursor: 'text',
+                    pointerEvents: isShiftPressed ? 'none' : 'auto',
                   }}
                   maxLength={1}
                 />
