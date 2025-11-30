@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { Crossword, Cell } from './types';
-import { createEmptyGrid, calculateClueNumbers, getCluesForGrid } from './utils/crossword';
+import { createEmptyGrid, calculateClueNumbers, getCluesForGrid, getClueAnswer } from './utils/crossword';
 import { exportToHTML } from './utils/export';
 import { GridEditor } from './components/GridEditor';
 import { ClueEditor } from './components/ClueEditor';
@@ -71,22 +71,21 @@ function App() {
     }
   }, []);
 
-  // Update clues when they change, preserving existing clue text/answers
+  // Update clues when they change, preserving existing clue text (but not answers - they come from grid)
   useEffect(() => {
     // Don't merge clues while loading from localStorage
     if (isLoading) return;
     
     const mergeClues = (existing: typeof across, newClues: typeof across) => {
-      // Start with new clues from grid, then preserve text/answers from existing clues
+      // Start with new clues from grid, then preserve text from existing clues
       const existingMap = new Map(existing.map(c => [c.number, c]));
       return newClues.map(clue => {
         const existingClue = existingMap.get(clue.number);
         if (existingClue) {
-          // Preserve existing text and answer
+          // Preserve existing text only (answer comes from grid)
           return {
             ...clue,
-            text: existingClue.text,
-            answer: existingClue.answer
+            text: existingClue.text
           };
         }
         return clue;
@@ -96,6 +95,29 @@ function App() {
     setAcrossClues(prev => mergeClues(prev, across));
     setDownClues(prev => mergeClues(prev, down));
   }, [across, down, isLoading]);
+
+  // Compute answers from grid for all clues
+  const computedAnswers = useMemo(() => {
+    const answers = new Map<string, string>();
+    
+    // Compute across answers
+    acrossClues.forEach(clue => {
+      const answer = getClueAnswer(grid, clue.number, 'across');
+      if (answer) {
+        answers.set(`across-${clue.number}`, answer);
+      }
+    });
+    
+    // Compute down answers
+    downClues.forEach(clue => {
+      const answer = getClueAnswer(grid, clue.number, 'down');
+      if (answer) {
+        answers.set(`down-${clue.number}`, answer);
+      }
+    });
+    
+    return answers;
+  }, [grid, acrossClues, downClues]);
 
   const handleGridChange = (newGrid: Cell[][]) => {
     setGrid(newGrid);
@@ -377,6 +399,8 @@ function App() {
               onGridChange={handleGridChange}
               selectedCell={selectedCell}
               onCellSelect={(row, col) => setSelectedCell({ row, col })}
+              acrossClues={acrossClues}
+              downClues={downClues}
             />
           </div>
 
@@ -386,11 +410,13 @@ function App() {
                 title="Across"
                 clues={acrossClues}
                 onCluesChange={setAcrossClues}
+                computedAnswers={computedAnswers}
               />
               <ClueEditor
                 title="Down"
                 clues={downClues}
                 onCluesChange={setDownClues}
+                computedAnswers={computedAnswers}
               />
             </div>
           </div>

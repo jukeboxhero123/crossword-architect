@@ -1,7 +1,20 @@
 import type { Crossword } from '../types';
+import { getClueAnswer } from './crossword';
 
 export function exportToHTML(crossword: Crossword): string {
   const { grid, acrossClues, downClues, title, author } = crossword;
+  
+  // Compute answers from grid for all clues
+  const cluesWithAnswers = {
+    across: acrossClues.map(clue => ({
+      ...clue,
+      answer: getClueAnswer(grid, clue.number, 'across')
+    })),
+    down: downClues.map(clue => ({
+      ...clue,
+      answer: getClueAnswer(grid, clue.number, 'down')
+    }))
+  };
   const numRows = grid.length;
   const numCols = grid[0]?.length || numRows;
 
@@ -367,8 +380,8 @@ export function exportToHTML(crossword: Crossword): string {
   
   <script>
     const grid = ${JSON.stringify(grid)};
-    const acrossClues = ${JSON.stringify(acrossClues)};
-    const downClues = ${JSON.stringify(downClues)};
+            const acrossClues = ${JSON.stringify(cluesWithAnswers.across)};
+            const downClues = ${JSON.stringify(cluesWithAnswers.down)};
     const numRows = ${numRows};
     const numCols = ${numCols};
     
@@ -487,14 +500,16 @@ export function exportToHTML(crossword: Crossword): string {
         if (!pos) return;
         
         const coord = direction === 'across' ? pos.row : pos.col;
+        const cells = getClueCells(clue.number, direction);
+        
+        if (cells.length === 0) return;
         
         // Find the next row/column with a clue (must be strictly greater)
         if (coord > targetCoord && coord < bestCoord) {
-          const cells = getClueCells(clue.number, direction);
-          if (cells.length > 0) {
-            bestClue = cells[0];
-            bestCoord = coord;
-          }
+          // Find first empty or partially filled cell in this clue
+          const firstFillable = cells.find(c => !userAnswers[\`\${c.row}-\${c.col}\`]) || cells[0];
+          bestClue = firstFillable;
+          bestCoord = coord;
         }
       });
       
@@ -512,27 +527,111 @@ export function exportToHTML(crossword: Crossword): string {
         const coord = direction === 'across' ? pos.row : pos.col;
         const cells = getClueCells(clue.number, direction);
         
-        if (cells.length > 0) {
-          if (coord < minCoord) {
-            minCoord = coord;
-            firstIncomplete = null;
-            firstAny = null;
+        if (cells.length === 0) return;
+        
+        if (coord < minCoord) {
+          minCoord = coord;
+          firstIncomplete = null;
+          firstAny = null;
+        }
+        
+        if (coord === minCoord) {
+          if (!isClueComplete(clue.number, direction)) {
+            if (!firstIncomplete) {
+              // Find first empty or partially filled cell in this clue
+              const firstFillable = cells.find(c => !userAnswers[\`\${c.row}-\${c.col}\`]) || cells[0];
+              firstIncomplete = firstFillable;
+            }
           }
-          
-          if (coord === minCoord) {
-            if (!isClueComplete(clue.number, direction)) {
-              if (!firstIncomplete) {
-                firstIncomplete = cells[0];
-              }
-            }
-            if (!firstAny) {
-              firstAny = cells[0];
-            }
+          if (!firstAny) {
+            firstAny = cells[0];
           }
         }
       });
       
       return firstIncomplete || firstAny;
+    }
+    
+    function findPreviousClue(row, col, direction) {
+      // For across: find previous clue in a different row
+      // For down: find previous clue in a different column
+      const targetCoord = direction === 'across' ? row : col;
+      const clues = direction === 'across' ? acrossClues : downClues;
+      
+      // First, try to find the last clue in the previous row/column
+      let bestClue = null;
+      let bestCoord = -1;
+      
+      clues.forEach(clue => {
+        const pos = findClueStartPosition(clue.number);
+        if (!pos) return;
+        
+        const coord = direction === 'across' ? pos.row : pos.col;
+        const cells = getClueCells(clue.number, direction);
+        
+        if (cells.length === 0) return;
+        
+        // Find the previous row/column with a clue (must be strictly less)
+        if (coord < targetCoord && coord > bestCoord) {
+          // Get the last cell of this clue (or last empty cell if available)
+          const lastEmpty = cells.slice().reverse().find(c => !userAnswers[\`\${c.row}-\${c.col}\`]);
+          bestClue = lastEmpty || cells[cells.length - 1];
+          bestCoord = coord;
+        }
+      });
+      
+      if (bestClue) return bestClue;
+      
+      // If no previous row/col found, wrap around to last incomplete clue
+      let lastIncomplete = null;
+      let lastAny = null;
+      let maxCoord = -1;
+      
+      clues.forEach(clue => {
+        const pos = findClueStartPosition(clue.number);
+        if (!pos) return;
+        
+        const coord = direction === 'across' ? pos.row : pos.col;
+        const cells = getClueCells(clue.number, direction);
+        
+        if (cells.length === 0) return;
+        
+        if (coord > maxCoord) {
+          maxCoord = coord;
+          lastIncomplete = null;
+          lastAny = null;
+        }
+        
+        if (coord === maxCoord) {
+          if (!isClueComplete(clue.number, direction)) {
+            if (!lastIncomplete) {
+              // Get the last cell of this clue (or last empty cell if available)
+              const lastEmpty = cells.slice().reverse().find(c => !userAnswers[\`\${c.row}-\${c.col}\`]);
+              lastIncomplete = lastEmpty || cells[cells.length - 1];
+            }
+          }
+          if (!lastAny) {
+            // Get the last cell of this clue
+            lastAny = cells[cells.length - 1];
+          }
+        }
+      });
+      
+      return lastIncomplete || lastAny;
+    }
+    
+    function moveToPreviousClue(row, col, direction) {
+      const prevCell = findPreviousClue(row, col, direction);
+      if (prevCell) {
+        const input = document.querySelector(\`input[data-row="\${prevCell.row}"][data-col="\${prevCell.col}"]\`);
+        if (input) {
+          // Set direction before selecting
+          currentDirection = direction;
+          input.focus();
+          input.select();
+          selectCell(prevCell.row, prevCell.col, true);
+        }
+      }
     }
     
     function moveToNextClue(row, col, direction) {
@@ -644,11 +743,45 @@ export function exportToHTML(crossword: Crossword): string {
       const row = parseInt(input.dataset.row);
       const col = parseInt(input.dataset.col);
       
-      if (e.key === 'Backspace' && !input.value) {
-        if (currentDirection === 'across') {
-          moveToNextCell(row, col, 0, -1);
+      if (e.key === 'Backspace') {
+        const currentValue = input.value;
+        const wordCells = getWordCells(row, col, currentDirection);
+        const currentIndex = wordCells.findIndex(c => c.row === row && c.col === col);
+        
+        // If cell has a value, clear it and move to previous
+        if (currentValue && currentValue.length > 0) {
+          input.value = '';
+          userAnswers[\`\${row}-\${col}\`] = '';
+          e.preventDefault();
+          
+          // Move to previous cell
+          if (currentIndex > 0) {
+            const prevCell = wordCells[currentIndex - 1];
+            const prevInput = document.querySelector(\`input[data-row="\${prevCell.row}"][data-col="\${prevCell.col}"]\`);
+            if (prevInput) {
+              prevInput.focus();
+              prevInput.select();
+              selectCell(prevCell.row, prevCell.col, true);
+            }
+          } else {
+            // At start of word, move to previous clue in previous row/column
+            moveToPreviousClue(row, col, currentDirection);
+          }
         } else {
-          moveToNextCell(row, col, -1, 0);
+          // Cell is empty, just move to previous
+          e.preventDefault();
+          if (currentIndex > 0) {
+            const prevCell = wordCells[currentIndex - 1];
+            const prevInput = document.querySelector(\`input[data-row="\${prevCell.row}"][data-col="\${prevCell.col}"]\`);
+            if (prevInput) {
+              prevInput.focus();
+              prevInput.select();
+              selectCell(prevCell.row, prevCell.col, true);
+            }
+          } else {
+            // At start of word, move to previous clue in previous row/column
+            moveToPreviousClue(row, col, currentDirection);
+          }
         }
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();

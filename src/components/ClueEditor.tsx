@@ -4,10 +4,11 @@ interface ClueEditorProps {
   title: string;
   clues: Clue[];
   onCluesChange: (clues: Clue[]) => void;
+  computedAnswers: Map<string, string>; // Map of "direction-number" to computed answer (e.g., "across-1", "down-1")
 }
 
-export function ClueEditor({ title, clues, onCluesChange }: ClueEditorProps) {
-  const updateClue = (index: number, field: 'text' | 'answer', value: string) => {
+export function ClueEditor({ title, clues, onCluesChange, computedAnswers }: ClueEditorProps) {
+  const updateClue = (index: number, field: 'text', value: string) => {
     const newClues = [...clues];
     newClues[index] = { ...newClues[index], [field]: value };
     onCluesChange(newClues);
@@ -36,9 +37,14 @@ export function ClueEditor({ title, clues, onCluesChange }: ClueEditorProps) {
                 <input
                   type="text"
                   placeholder="Answer..."
-                  value={clue.answer}
-                  onChange={(e) => updateClue(index, 'answer', e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
+                  value={computedAnswers.get(`${title.toLowerCase()}-${clue.number}`) || ''}
+                  readOnly
+                  disabled
                   className="clue-answer-input"
+                  style={{
+                    opacity: 0.7,
+                    cursor: 'not-allowed',
+                  }}
                 />
               </div>
             </div>

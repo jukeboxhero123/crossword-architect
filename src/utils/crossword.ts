@@ -83,3 +83,36 @@ export function getCluesForGrid(grid: Cell[][]): { across: Clue[], down: Clue[] 
   return { across: across.sort((a, b) => a.number - b.number), down: down.sort((a, b) => a.number - b.number) };
 }
 
+export function getClueAnswer(grid: Cell[][], clueNumber: number, direction: 'across' | 'down'): string {
+  const cells: Cell[] = [];
+  let startRow = -1, startCol = -1;
+  
+  // Find start cell
+  for (let row = 0; row < grid.length; row++) {
+    for (let col = 0; col < grid[row].length; col++) {
+      if (grid[row][col].number === clueNumber) {
+        startRow = row;
+        startCol = col;
+        break;
+      }
+    }
+    if (startRow !== -1) break;
+  }
+  
+  if (startRow === -1) return '';
+  
+  const rowDelta = direction === 'down' ? 1 : 0;
+  const colDelta = direction === 'across' ? 1 : 0;
+  
+  let row = startRow;
+  let col = startCol;
+  
+  while (row >= 0 && row < grid.length && col >= 0 && col < grid[row].length && !grid[row][col].isBlack) {
+    cells.push(grid[row][col]);
+    row += rowDelta;
+    col += colDelta;
+  }
+  
+  return cells.map(cell => cell.letter || '_').join('');
+}
+
