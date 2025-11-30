@@ -4,13 +4,15 @@ import { createEmptyGrid, calculateClueNumbers, getCluesForGrid } from './utils/
 import { exportToHTML } from './utils/export';
 import { GridEditor } from './components/GridEditor';
 import { ClueEditor } from './components/ClueEditor';
+import { Menu } from './components/Menu';
 import './App.css';
 
 const DEFAULT_ROWS = 15;
 const DEFAULT_COLS = 15;
-const STORAGE_KEY = 'crossword-architect-save';
+const STORAGE_KEY = 'crossword-architect-saves';
 
-interface SavedCrossword {
+export interface SavedCrossword {
+  id: string;
   gridRows: number;
   gridCols: number;
   grid: Cell[][];
@@ -18,9 +20,14 @@ interface SavedCrossword {
   downClues: Crossword['downClues'];
   title: string;
   author: string;
+  lastModified: number;
 }
 
 function App() {
+  const [currentView, setCurrentView] = useState<'menu' | 'editor'>('menu');
+  const [currentCrosswordId, setCurrentCrosswordId] = useState<string | null>(null);
+  const [savedCrosswords, setSavedCrosswords] = useState<SavedCrossword[]>([]);
+  
   const [gridRows, setGridRows] = useState(DEFAULT_ROWS);
   const [gridCols, setGridCols] = useState(DEFAULT_COLS);
   const [grid, setGrid] = useState<Cell[][]>(() => createEmptyGrid(DEFAULT_ROWS, DEFAULT_COLS));
@@ -49,25 +56,15 @@ function App() {
     setGrid(numberedGrid);
   }, [numberedGrid]);
 
-  // Load from localStorage on mount
+  // Load saved crosswords list from localStorage on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        const data: SavedCrossword = JSON.parse(saved);
-        setIsLoading(true);
-        setGridRows(data.gridRows);
-        setGridCols(data.gridCols);
-        setGrid(data.grid);
-        setAcrossClues(data.acrossClues || []);
-        setDownClues(data.downClues || []);
-        setTitle(data.title || 'My Crossword Puzzle');
-        setAuthor(data.author || '');
-        // Mark as loaded after a brief delay to let state settle
-        setTimeout(() => setIsLoading(false), 100);
-      } else {
-        setIsLoading(false);
+        const crosswords: SavedCrossword[] = JSON.parse(saved);
+        setSavedCrosswords(crosswords);
       }
+      setIsLoading(false);
     } catch (error) {
       console.error('Failed to load from localStorage:', error);
       setIsLoading(false);
@@ -137,8 +134,11 @@ function App() {
   };
 
   const saveToLocalStorage = () => {
+    if (!currentCrosswordId) return; // Don't save if no active crossword
+    
     try {
-      const data: SavedCrossword = {
+      const crosswordData: SavedCrossword = {
+        id: currentCrosswordId,
         gridRows,
         gridCols,
         grid,
@@ -146,24 +146,112 @@ function App() {
         downClues,
         title,
         author,
+        lastModified: Date.now(),
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+      // Update or add to saved crosswords list
+      setSavedCrosswords(prev => {
+        const updated = prev.filter(c => c.id !== currentCrosswordId);
+        updated.push(crosswordData);
+        // Sort by last modified (newest first)
+        updated.sort((a, b) => b.lastModified - a.lastModified);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
     } catch (error) {
       console.error('Failed to save to localStorage:', error);
     }
   };
 
-  // Auto-save with debounce
+  // Auto-save with debounce (only when in editor view with active crossword)
   useEffect(() => {
-    // Don't auto-save while loading
-    if (isLoading) return;
+    // Don't auto-save while loading or if not in editor view
+    if (isLoading || currentView !== 'editor' || !currentCrosswordId) return;
     
     const timeoutId = setTimeout(() => {
       saveToLocalStorage();
     }, 500); // Save after 500ms of inactivity
 
     return () => clearTimeout(timeoutId);
-  }, [grid, acrossClues, downClues, title, author, gridRows, gridCols, isLoading]);
+  }, [grid, acrossClues, downClues, title, author, gridRows, gridCols, isLoading, currentView, currentCrosswordId]);
+
+  const handleNewCrossword = () => {
+    const newId = `crossword-${Date.now()}`;
+    setIsLoading(true);
+    setCurrentCrosswordId(newId);
+    setGridRows(DEFAULT_ROWS);
+    setGridCols(DEFAULT_COLS);
+    const newGrid = createEmptyGrid(DEFAULT_ROWS, DEFAULT_COLS);
+    setGrid(newGrid);
+    setAcrossClues([]);
+    setDownClues([]);
+    setTitle('My Crossword Puzzle');
+    setAuthor('');
+    setSelectedCell(null);
+    setCurrentView('editor');
+    // Mark as loaded after a brief delay to let state settle
+    setTimeout(() => {
+      setIsLoading(false);
+      // Save the new crossword immediately so it appears in the menu
+      const crosswordData: SavedCrossword = {
+        id: newId,
+        gridRows: DEFAULT_ROWS,
+        gridCols: DEFAULT_COLS,
+        grid: newGrid,
+        acrossClues: [],
+        downClues: [],
+        title: 'My Crossword Puzzle',
+        author: '',
+        lastModified: Date.now(),
+      };
+      setSavedCrosswords(prev => {
+        const updated = [...prev, crosswordData];
+        updated.sort((a, b) => b.lastModified - a.lastModified);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
+    }, 100);
+  };
+
+  const handleLoadCrossword = (crossword: SavedCrossword) => {
+    setIsLoading(true);
+    setCurrentCrosswordId(crossword.id);
+    setGridRows(crossword.gridRows);
+    setGridCols(crossword.gridCols);
+    setGrid(crossword.grid);
+    setAcrossClues(crossword.acrossClues || []);
+    setDownClues(crossword.downClues || []);
+    setTitle(crossword.title || 'My Crossword Puzzle');
+    setAuthor(crossword.author || '');
+    setSelectedCell(null);
+    setCurrentView('editor');
+    // Mark as loaded after a brief delay to let state settle
+    setTimeout(() => setIsLoading(false), 100);
+  };
+
+  const handleDeleteCrossword = (id: string) => {
+    if (confirm('Are you sure you want to delete this crossword? This cannot be undone.')) {
+      setSavedCrosswords(prev => {
+        const updated = prev.filter(c => c.id !== id);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
+      
+      // If we're viewing the deleted crossword, go back to menu
+      if (currentCrosswordId === id) {
+        setCurrentView('menu');
+        setCurrentCrosswordId(null);
+      }
+    }
+  };
+
+  const handleBackToMenu = () => {
+    // Save current crossword before leaving
+    if (currentCrosswordId) {
+      saveToLocalStorage();
+    }
+    setCurrentView('menu');
+  };
 
   const handleExport = () => {
     const crossword: Crossword = {
@@ -187,6 +275,20 @@ function App() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+  // Show menu or editor based on current view
+  if (currentView === 'menu') {
+    return (
+      <div className="app">
+        <Menu
+          savedCrosswords={savedCrosswords}
+          onNewCrossword={handleNewCrossword}
+          onLoadCrossword={handleLoadCrossword}
+          onDeleteCrossword={handleDeleteCrossword}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -253,6 +355,9 @@ function App() {
 
           <div className="sidebar-section">
             <h2>Actions</h2>
+            <button onClick={handleBackToMenu} className="btn btn-secondary">
+              ← Back to Menu
+            </button>
             <button onClick={handleNewGrid} className="btn btn-secondary">
               New Grid
             </button>
