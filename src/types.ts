@@ -2,6 +2,7 @@ export interface Cell {
   isBlack: boolean;
   isCircle?: boolean;
   isShaded?: boolean;
+  paintColor?: string; // Color for completion paint mode
   number?: number;
   letter?: string;
   isSelected?: boolean;

@@ -37,6 +37,9 @@ function App() {
   const [title, setTitle] = useState('My Crossword Puzzle');
   const [author, setAuthor] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [paintMode, setPaintMode] = useState(false);
+  const [paintColor, setPaintColor] = useState('#ff0000'); // Default red
+  const [eraserMode, setEraserMode] = useState(false);
 
   // Track black squares pattern to detect changes
   const blackSquaresKey = useMemo(() => 
@@ -394,6 +397,57 @@ function App() {
           </div>
 
           <div className="sidebar-section">
+            <h2>Paint Mode</h2>
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={paintMode}
+                  onChange={(e) => {
+                    setPaintMode(e.target.checked);
+                    if (e.target.checked) {
+                      setEraserMode(false);
+                    }
+                  }}
+                  style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                />
+                <span>Enable Paint Mode</span>
+              </label>
+            </div>
+            {paintMode && (
+              <>
+                <div className="form-group">
+                  <label>Paint Color</label>
+                  <input
+                    type="color"
+                    value={paintColor}
+                    onChange={(e) => {
+                      setPaintColor(e.target.value);
+                      setEraserMode(false);
+                    }}
+                    style={{ width: '100%', height: '40px', cursor: 'pointer', border: '2px solid #e0e0e0', borderRadius: '8px' }}
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    setEraserMode(!eraserMode);
+                    if (!eraserMode) {
+                      setPaintMode(true);
+                    }
+                  }}
+                  className={`btn ${eraserMode ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ marginTop: '10px' }}
+                >
+                  {eraserMode ? '🖊️ Eraser Active' : '🧹 Eraser'}
+                </button>
+                <p style={{ fontSize: '0.85em', color: '#666', marginTop: '10px' }}>
+                  {eraserMode ? 'Click squares to erase paint' : 'Click squares to paint'}
+                </p>
+              </>
+            )}
+          </div>
+
+          <div className="sidebar-section">
             <h2>Actions</h2>
             <button onClick={handleBackToMenu} className="btn btn-secondary">
               ← Back to Menu
@@ -419,6 +473,9 @@ function App() {
               onCellSelect={(row, col) => setSelectedCell({ row, col })}
               acrossClues={acrossClues}
               downClues={downClues}
+              paintMode={paintMode}
+              paintColor={paintColor}
+              eraserMode={eraserMode}
             />
           </div>
 

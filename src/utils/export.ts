@@ -121,9 +121,9 @@ export function exportToHTML(crossword: Crossword): string {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(100, 181, 246, 0.6);
+      background: rgba(100, 181, 246, 0.4);
       pointer-events: none;
-      z-index: 1;
+      z-index: 2;
     }
     
     .cell.highlighted::before {
@@ -133,13 +133,13 @@ export function exportToHTML(crossword: Crossword): string {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(66, 165, 245, 0.7);
+      background: rgba(66, 165, 245, 0.5);
       pointer-events: none;
-      z-index: 1;
+      z-index: 2;
     }
     
     .cell.highlighted.current-word::before {
-      background: rgba(66, 165, 245, 0.7);
+      background: rgba(66, 165, 245, 0.5);
     }
     
     .cell-circle {
@@ -918,6 +918,29 @@ export function exportToHTML(crossword: Crossword): string {
           input.style.cursor = 'pointer';
           input.style.opacity = '1';
         });
+        
+        // Add paint color overlays to cells
+        for (let row = 0; row < numRows; row++) {
+          for (let col = 0; col < numCols; col++) {
+            const cell = grid[row][col];
+            if (!cell.isBlack && cell.paintColor) {
+              const cellEl = document.querySelector(\`.cell[data-row="\${row}"][data-col="\${col}"]\`);
+              if (cellEl) {
+                const paintOverlay = document.createElement('div');
+                paintOverlay.style.position = 'absolute';
+                paintOverlay.style.top = '0';
+                paintOverlay.style.left = '0';
+                paintOverlay.style.right = '0';
+                paintOverlay.style.bottom = '0';
+                paintOverlay.style.backgroundColor = cell.paintColor;
+                paintOverlay.style.opacity = '0.5';
+                paintOverlay.style.pointerEvents = 'none';
+                paintOverlay.style.zIndex = '1';
+                cellEl.appendChild(paintOverlay);
+              }
+            }
+          }
+        }
         
         // Display time in victory modal
         const elapsedTime = getElapsedTime();

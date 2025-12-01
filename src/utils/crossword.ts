@@ -13,6 +13,7 @@ export function calculateClueNumbers(grid: Cell[][]): Cell[][] {
       isBlack: cell.isBlack,
       isCircle: cell.isCircle,
       isShaded: cell.isShaded,
+      paintColor: cell.paintColor,
       letter: cell.letter,
       isSelected: cell.isSelected
       // number will be set below

@@ -9,9 +9,12 @@ interface GridEditorProps {
   onCellSelect: (row: number, col: number) => void;
   acrossClues: Clue[];
   downClues: Clue[];
+  paintMode: boolean;
+  paintColor: string;
+  eraserMode: boolean;
 }
 
-export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acrossClues, downClues }: GridEditorProps) {
+export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acrossClues, downClues, paintMode, paintColor, eraserMode }: GridEditorProps) {
   const [currentDirection, setCurrentDirection] = useState<'across' | 'down'>('across');
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [isCtrlPressed, setIsCtrlPressed] = useState(false);
@@ -131,6 +134,22 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
     return currentDirection;
   };
   const handleCellClick = (row: number, col: number, e?: React.MouseEvent) => {
+    // Paint mode takes precedence (unless modifiers are pressed)
+    if (paintMode && !isShiftPressed && !e?.shiftKey && !e?.ctrlKey && !e?.metaKey && !e?.altKey) {
+      const newGrid = grid.map(r => [...r]);
+      if (eraserMode) {
+        // Erase paint color
+        delete newGrid[row][col].paintColor;
+      } else {
+        // Paint with selected color (only on non-black squares)
+        if (!newGrid[row][col].isBlack) {
+          newGrid[row][col].paintColor = paintColor;
+        }
+      }
+      onGridChange(newGrid);
+      return;
+    }
+    
     // Check modifiers for cell type changes
     if (isShiftPressed || e?.shiftKey) {
       // Shift+click to toggle black square
@@ -140,6 +159,7 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
       if (newGrid[row][col].isBlack) {
         newGrid[row][col].isCircle = false;
         newGrid[row][col].isShaded = false;
+        delete newGrid[row][col].paintColor;
       }
       if (!newGrid[row][col].isBlack) {
         delete newGrid[row][col].number;
@@ -538,7 +558,7 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
                     ? '#b0b0b0'
                     : '#fff',
                 position: 'relative',
-                cursor: 'pointer',
+                cursor: paintMode ? (eraserMode ? 'grab' : 'crosshair') : (isShiftPressed || isCtrlPressed || isAltPressed) ? 'pointer' : 'text',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -549,6 +569,22 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
                   : 'none',
               }}
             >
+              {/* Paint color overlay (only when paint mode is on) */}
+              {paintMode && cell.paintColor && !cell.isBlack && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: cell.paintColor,
+                    opacity: 0.5, // Translucent overlay
+                    pointerEvents: 'none',
+                    zIndex: 1,
+                  }}
+                />
+              )}
               {/* Highlight overlay for current word */}
               {highlightedWordCells.has(`${rowIdx}-${colIdx}`) && !cell.isBlack && (
                 <div
@@ -562,14 +598,20 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
                       ? 'rgba(66, 165, 245, 0.7)' // Vibrant blue for active cell
                       : 'rgba(100, 181, 246, 0.6)', // Vibrant light blue for word
                     pointerEvents: 'none',
-                    zIndex: 1,
+                    zIndex: 2, // Above paint overlay
                   }}
                 />
               )}
-              {/* Invisible overlay when modifiers are pressed to handle cell type changes */}
-              {(isShiftPressed || isCtrlPressed || isAltPressed) && !cell.isBlack && (
+              {/* Invisible overlay when modifiers are pressed or paint mode is active */}
+              {((isShiftPressed || isCtrlPressed || isAltPressed) || paintMode) && !cell.isBlack && (
                 <div
                   onMouseDown={(e) => {
+                    if (paintMode) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleCellClick(rowIdx, colIdx, e);
+                      return;
+                    }
                     // Check which modifier is pressed
                     if (e.shiftKey || isShiftPressed) {
                       e.preventDefault();
@@ -592,7 +634,7 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
                     right: 0,
                     bottom: 0,
                     zIndex: 10,
-                    cursor: 'pointer',
+                    cursor: paintMode ? (eraserMode ? 'grab' : 'crosshair') : 'pointer',
                     backgroundColor: 'transparent',
                   }}
                 />
@@ -636,6 +678,11 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
                   onChange={(e) => handleCellInput(rowIdx, colIdx, e.target.value)}
                   onKeyDown={(e) => handleCellKeyDown(rowIdx, colIdx, e)}
                   onClick={(e) => {
+                    if (paintMode) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
                     e.stopPropagation();
                     // Check if clicking on the currently selected cell to toggle direction
                     if (selectedCell?.row === rowIdx && selectedCell?.col === colIdx) {
@@ -647,6 +694,10 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
                     }
                   }}
                   onFocus={(e) => {
+                    if (paintMode) {
+                      e.target.blur();
+                      return;
+                    }
                     e.target.select();
                     const direction = determineDirection(rowIdx, colIdx);
                     setCurrentDirection(direction);
@@ -666,7 +717,7 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
                     margin: 0,
                     outline: 'none',
                     cursor: 'text',
-                    pointerEvents: (isShiftPressed || isCtrlPressed || isAltPressed) ? 'none' : 'auto',
+                          pointerEvents: (isShiftPressed || isCtrlPressed || isAltPressed || paintMode) ? 'none' : 'auto',
                     position: 'relative',
                     zIndex: 2,
                   }}
@@ -678,7 +729,10 @@ export function GridEditor({ grid, onGridChange, selectedCell, onCellSelect, acr
         )}
       </div>
       <p style={{ marginTop: '10px', color: '#666', fontSize: '0.9em' }}>
-        Type letters in cells • Auto-advances to next cell • Click current cell to toggle direction
+        {paintMode 
+          ? (eraserMode ? 'Eraser mode: Click squares to erase paint' : `Paint mode: Click squares to paint with ${paintColor}`)
+          : 'Type letters in cells • Auto-advances to next cell • Click current cell to toggle direction • Shift+Click to toggle black squares'
+        }
       </p>
     </div>
   );
