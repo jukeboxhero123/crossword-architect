@@ -183,10 +183,18 @@ export function exportToHTML(crossword: Crossword): string {
     .clues {
       flex: 1;
       min-width: 300px;
+      display: flex;
+      gap: 20px;
+      align-items: stretch;
     }
     
     .clues-section {
-      margin-bottom: 30px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 0;
+      max-height: 70vh;
+      padding-right: 8px;
     }
     
     .clues-section h2 {
@@ -195,6 +203,13 @@ export function exportToHTML(crossword: Crossword): string {
       font-size: 1.5em;
       border-bottom: 2px solid #667eea;
       padding-bottom: 5px;
+    }
+    
+    #across-clues,
+    #down-clues {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 4px;
     }
     
     .clue-item {
@@ -394,6 +409,10 @@ export function exportToHTML(crossword: Crossword): string {
     
     @media (max-width: 768px) {
       .content {
+        flex-direction: column;
+      }
+      
+      .clues {
         flex-direction: column;
       }
       
@@ -1223,22 +1242,14 @@ export function exportToHTML(crossword: Crossword): string {
         item.classList.remove('highlighted');
       });
       
-      // Highlight matching clue based on direction
       const clueNumber = cell.number;
-      const clueItems = document.querySelectorAll('.clue-item');
-      clueItems.forEach(item => {
-        const clueNumText = item.querySelector('.clue-number').textContent;
-        const clueNum = parseInt(clueNumText);
-        if (clueNum === clueNumber) {
-          // Check if this is the right section (across or down)
-          const section = item.closest('.clues-section');
-          const sectionTitle = section ? section.querySelector('h2').textContent.toLowerCase() : '';
-          if ((direction === 'across' && sectionTitle === 'across') ||
-              (direction === 'down' && sectionTitle === 'down')) {
-            item.classList.add('highlighted');
-          }
-        }
-      });
+      const selector = \`.clue-item[data-direction="\${direction}"][data-number="\${clueNumber}"]\`;
+      const clueItem = document.querySelector(selector);
+      if (clueItem) {
+        clueItem.classList.add('highlighted');
+        // Keep the active clue visible in its scrollable panel
+        clueItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
     }
     
     function renderClues() {
@@ -1246,14 +1257,14 @@ export function exportToHTML(crossword: Crossword): string {
       const downEl = document.getElementById('down-clues');
       
       acrossEl.innerHTML = acrossClues.map(clue => 
-        \`<div class="clue-item">
+        \`<div class="clue-item" data-direction="across" data-number="\${clue.number}">
           <span class="clue-number">\${clue.number}.</span>
           <span class="clue-text">\${clue.text || '(No clue)'}</span>
         </div>\`
       ).join('');
       
       downEl.innerHTML = downClues.map(clue => 
-        \`<div class="clue-item">
+        \`<div class="clue-item" data-direction="down" data-number="\${clue.number}">
           <span class="clue-number">\${clue.number}.</span>
           <span class="clue-text">\${clue.text || '(No clue)'}</span>
         </div>\`
